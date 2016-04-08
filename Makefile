@@ -13,6 +13,11 @@ CC ?= gcc
 CFLAGS = -std=gnu99 -Wall -O2 -g -I .
 LDFLAGS = -lpthread
 
+ifeq ($(strip $(PROFILE)),1)
+PROF_FLAGS = -pg
+CFLAGS += $(PROF_FLAGS) 
+endif
+
 OBJS := \
 	async.o \
 	reactor.o \
