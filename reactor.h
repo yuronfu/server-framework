@@ -5,7 +5,7 @@
 #define REACTOR_MAX_EVENTS 64
 #endif
 #ifndef REACTOR_TICK
-#define REACTOR_TICK 1000
+#define REACTOR_TICK 10
 #endif
 
 #include <sys/time.h>
