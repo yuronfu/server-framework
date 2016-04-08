@@ -41,7 +41,7 @@ void timer_task(server_pt srv)
 
 void on_init(server_pt srv)
 {
-    Server.run_every(srv, 1000, -1, (void *) timer_task, srv);
+    Server.run_every(srv, 100, -1, (void *) timer_task, srv);
 }
 
 int main(int argc, char *argv[])
