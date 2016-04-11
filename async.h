@@ -83,8 +83,11 @@ extern struct __ASYNC_API__ {
      *   Async.run(async, task, arg);
      * @endcode
      */
+#ifndef LOCKFREE
     int (*run)(async_p async, void (*task)(void *), void *arg);
-
+#else
+    int (*run)(async_p async, void (*task)(void *), void *arg, int flag);
+#endif
     /**
      * \brief Both signals for an Async object to finish up and waits
      *        for it to finish.

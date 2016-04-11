@@ -20,9 +20,18 @@ endif
 
 OBJS := \
 	async.o \
+	async-lockfree.o \
 	reactor.o \
 	buffer.o \
 	protocol-server.o
+
+ifeq ($(strip $(LOCKFREE)),1)
+OBJS := $(filter-out async.o,$(OBJS))
+CFLAGS += -DLOCKFREE
+else
+OBJS := $(filter-out async-lockfree.o,$(OBJS))
+endif
+
 deps := $(OBJS:%.o=%.o.d)
 OBJS := $(addprefix $(OUT)/,$(OBJS))
 deps := $(addprefix $(OUT)/,$(deps))

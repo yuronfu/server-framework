@@ -540,12 +540,18 @@ static void async_on_data(server_pt *p_server)
      * is still open.
      */
     if ((*p_server)->protocol_map[sockfd])
+#ifndef LOCKFREE
         Async.run((*p_server)->async,
                   (void (*)(void *)) async_on_data, p_server);
+#else
+        Async.run((*p_server)->async,
+                  (void (*)(void *)) async_on_data, p_server,0);
+#endif
 }
 
 static void on_data(struct Reactor *reactor, int fd)
 {
+#ifndef LOCKFREE
     if (fd == _server_(reactor)->srvfd) {
         /*listening socket. accept connections. */
         Async.run(_server_(reactor)->async,
@@ -557,6 +563,19 @@ static void on_data(struct Reactor *reactor, int fd)
                   (void (*)(void *)) async_on_data,
                   &(_server_(reactor)->server_map[fd]));
     }
+#else
+    if (fd == _server_(reactor)->srvfd) {
+        /*listening socket. accept connections. */
+        Async.run(_server_(reactor)->async,
+                  (void (*)(void *)) accept_async, reactor,0);
+    } else if (_protocol_(reactor, fd) && _protocol_(reactor, fd)->on_data) {
+        _server_(reactor)->idle[fd] = 0;
+        /* clients, forward on */
+        Async.run(_server_(reactor)->async,
+                  (void (*)(void *)) async_on_data,
+                  &(_server_(reactor)->server_map[fd]),0);
+    }
+#endif
 }
 
 /* calls the reactor's core and checks for timeouts.
@@ -582,7 +601,7 @@ static void srv_cycle_core(server_pt server)
     /* timeout + local close management */
     if (server->last_to != _reactor_(server)->last_tick) {
         /* We use the delta with fuzzy logic (only after the first second) */
-        int delta = _reactor_(server)->last_tick - server->last_to;
+        int time_diff = _reactor_(server)->last_tick - server->last_to;
         for (long i = 3; i <= _reactor_(server)->maxfd; i++) {
             if (server->protocol_map[i] && fcntl(i, F_GETFL) < 0 &&
                 errno == EBADF) {
@@ -590,7 +609,7 @@ static void srv_cycle_core(server_pt server)
             }
             if (server->tout[i]) {
                 if (server->tout[i] > server->idle[i])
-                    server->idle[i] += server->idle[i] ? delta : 1;
+                    server->idle[i] += server->idle[i] ? time_diff : 1;
                 else {
                     if (server->protocol_map[i] &&
                         server->protocol_map[i]->ping)
@@ -603,6 +622,7 @@ static void srv_cycle_core(server_pt server)
         /* ready for next call */
         server->last_to = _reactor_(server)->last_tick;
     }
+#ifndef LOCKFREE
     if (server->run &&
         Async.run(server->async,
                   (void (*)(void *)) srv_cycle_core, server)) {
@@ -611,6 +631,16 @@ static void srv_cycle_core(server_pt server)
             "couldn't schedule the server's reactor in the task queue");
         exit(1);
     }
+#else
+    if (server->run &&
+        Async.run(server->async,
+                  (void (*)(void *)) srv_cycle_core, server,1)) {
+        perror(
+            "FATAL ERROR:"
+            "couldn't schedule the server's reactor in the task queue");
+        exit(1);
+    }
+#endif
 }
 
 static int srv_listen(struct ServerSettings settings)
@@ -754,7 +784,11 @@ static int srv_listen(struct ServerSettings settings)
 
     /* initiate the core's cycle */
     srv.run = 1;
+#ifndef LOCKFREE
     Async.run(srv.async, (void (*)(void *)) srv_cycle_core, &srv);
+#else
+    Async.run(srv.async, (void (*)(void *)) srv_cycle_core, &srv,1);
+#endif
     Async.wait(srv.async);
     fprintf(stderr, "server done\n");
     /* cleanup */
@@ -1046,8 +1080,13 @@ static void perform_fd_task(struct FDTask* task)
             /* free the memory */
             destroy_fd_task(task->server, task);
         } else
+#ifndef LOCKFREE
             Async.run(task->server->async,
                       (void (*)(void *)) perform_fd_task, task);
+#else
+            Async.run(task->server->async,
+                      (void (*)(void *)) perform_fd_task, task,0);
+#endif
     } else {
         if (task->fallback)  /* check for fallback, call if requested */
             task->fallback(task->server, task->fd, task->arg);
@@ -1140,8 +1179,13 @@ static void perform_group_task(struct GroupTask *task)
     destroy_group_task(task->server, task);
     return;
 rescedule:
+#ifndef LOCKFREE
     Async.run(task->server->async,
               (void (*)(void *)) &perform_group_task, task);
+#else
+    Async.run(task->server->async,
+              (void (*)(void *)) &perform_group_task, task,0);
+#endif
     return;
 }
 
@@ -1169,8 +1213,13 @@ static int each(struct Server *server, int origin_fd,
     gtask->fd_origin = origin_fd;
     int ret = each_block(server, origin_fd, service,
                          add_to_group_task, gtask);
+#ifndef LOCKFREE
     Async.run(server->async,
               (void (*)(void *)) &perform_group_task, gtask);
+#else
+    Async.run(server->async,
+              (void (*)(void *)) &perform_group_task, gtask,0);
+#endif
     return ret;
 }
 
@@ -1219,8 +1268,13 @@ static int fd_task(struct Server *server, int sockfd,
             .task = task, .arg = arg,
             .fallback = fallback
         };
+#ifndef LOCKFREE
         Async.run(server->async,
                   (void (*)(void *)) &perform_fd_task, msg);
+#else
+        Async.run(server->async,
+                  (void (*)(void *)) &perform_fd_task, msg,0);
+#endif
         return 0;
     }
     return -1;
@@ -1228,7 +1282,11 @@ static int fd_task(struct Server *server, int sockfd,
 
 static int run_async(struct Server *self, void task(void *), void *arg)
 {
+#ifndef LOCKFREE
     return Async.run(self->async, task, arg);
+#else
+    return Async.run(self->async, task, arg,0);
+#endif
 }
 
 static int run_after(struct Server *self, long milliseconds,
