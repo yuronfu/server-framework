@@ -33,10 +33,10 @@ static void schedule_tasks2(void *arg)
     fprintf(stderr, "# schedule task at (%lf) ms\n", time_diff(start, now));
     async_p async = arg;
     for (size_t i = 0; i < (8 * 1024); i++) {
-        Async.run(async, greeting, NULL);
+        Async.run(async, greeting, NULL,0);
         printf("wrote task %lu\n", i);
     }
-    Async.run(async, greeting, NULL);
+    Async.run(async, greeting, NULL,0);
     Async.signal(async);
     clock_gettime(CLOCK_REALTIME, &now);
     printf("# signal finish at (%lf) ms\n", time_diff(start, now));
@@ -48,9 +48,9 @@ static void schedule_tasks(void *arg)
     fprintf(stderr, "# schedule task at (%lf) ms\n", time_diff(start, now));
     async_p async = arg;
     for (size_t i = 0; i < (8 * 1024); i++)
-        Async.run(async, greeting, NULL);
+        Async.run(async, greeting, NULL,0);
     Async.run(async,
-              schedule_tasks2, async /* as the argument to tasks2 */);
+              schedule_tasks2, async /* as the argument to tasks2 */,1);
 }
 
 int main(void)
@@ -67,7 +67,7 @@ int main(void)
     }
     /* send a task */
     clock_gettime(CLOCK_REALTIME, &start);
-    Async.run(async, schedule_tasks, async);
+    Async.run(async, schedule_tasks, async,1);
 
     /* wait for all tasks to finish, closing threads, clearing memory */
     Async.wait(async);
