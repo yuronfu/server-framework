@@ -126,7 +126,7 @@ static void perform_tasks(struct thpool *thread)
     unsigned int tmp;
     do {
         /* grab a task from the queue. */
-        if(thread_queue_len(thread) <= 0) break;
+        if(thread_queue_empty(thread)) break;
         tmp = thread->rear++;
         c = thread->work_queue + queue_offset(tmp);
         /* perform the task */
@@ -199,7 +199,7 @@ static void async_finish(async_p async)
 /** Destroys the Async object, releasing its memory. */
 static void async_destroy(async_p async)
 {
-    pthread_mutex_lock(&async->lock);
+    //pthread_mutex_lock(&async->lock);
     struct thpool *thread;
     /*free the thread pool*/
     for(int i = 0 ; i <= async->count ; i++) {
@@ -214,8 +214,8 @@ static void async_destroy(async_p async)
             thread->pipe.out = 0;
         }
     }
-    pthread_mutex_unlock(&async->lock);
-    pthread_mutex_destroy(&async->lock);
+    //pthread_mutex_unlock(&async->lock);
+    //pthread_mutex_destroy(&async->lock);
     free(async);
 }
 
@@ -223,28 +223,29 @@ static async_p async_create(int threads)
 {
     async_p async = malloc(sizeof(*async) + (threads+1) * sizeof(struct thpool)); /**< an extra thread is used to be producer */
 
-    if (pthread_mutex_init(&(async->lock), NULL)) {
+    /*if (pthread_mutex_init(&(async->lock), NULL)) {
         free(async);
         return NULL;
-    };
+    };*/
 
     async->run = 1;
+    async->count = threads;
     /* create threads */
-    for (async->count = 0; async->count <= threads; async->count++) {
+    for (int i = 0; i <= threads; i++) {
         /* initialize pipe */
-        SELECT_THREAD(async,async->count)->pipe.in = 0;
-        SELECT_THREAD(async,async->count)->pipe.out = 0;
-        if (pipe((int *) &(SELECT_THREAD(async,async->count)->pipe))) {
+        SELECT_THREAD(async,i)->pipe.in = 0;
+        SELECT_THREAD(async,i)->pipe.out = 0;
+        if (pipe((int *) &(SELECT_THREAD(async,i)->pipe))) {
             free(async);
             return NULL;
         };
-        fcntl(SELECT_THREAD(async,async->count)->pipe.out, F_SETFL, O_NONBLOCK | O_WRONLY);
+        fcntl(SELECT_THREAD(async,i)->pipe.out, F_SETFL, O_NONBLOCK | O_WRONLY);
         /* initialize work queue */
-        memset(SELECT_THREAD(async,async->count)->work_queue,0,WORK_QUEUE_SIZE*sizeof(struct AsyncTask));
-        SELECT_THREAD(async,async->count)->front = 0;
-        SELECT_THREAD(async,async->count)->rear = 0;
+        memset(SELECT_THREAD(async,i)->work_queue,0,WORK_QUEUE_SIZE*sizeof(struct AsyncTask));
+        SELECT_THREAD(async,i)->front = 0;
+        SELECT_THREAD(async,i)->rear = 0;
         
-        if (create_thread(&(SELECT_THREAD(async,async->count)->thid),
+        if (create_thread(&(SELECT_THREAD(async,i)->thid),
                           worker_thread_cycle, async)) {
             /* signal */
             async_signal(async);
@@ -254,7 +255,7 @@ static async_p async_create(int threads)
             return NULL;
         };
     }
-    async->count--;
+
     return async;
 }
 
