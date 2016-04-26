@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
     struct Protocol protocol = { .on_data = on_data };
     start_server(.protocol = &protocol,
                  .timeout = 1,
-                 //.on_init = on_init,
+                 .on_init = on_init,
                  .threads = THREAD_COUNT);
     return 0;
 }
